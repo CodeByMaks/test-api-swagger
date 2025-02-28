@@ -150,6 +150,8 @@ function App() {
   const openImgModal = (taskId) => {
     setCurrentTaskId(taskId);
     setIsImgModalOpen(true);
+    setSelectedFiles(null);
+    setPreviewUrls([]);
   };
   
   const handleFileSelect = (e) => {
@@ -167,6 +169,7 @@ function App() {
         }
       };
     });
+    e.target.value = "";
   };
   
   const handleAddImage = async () => {
