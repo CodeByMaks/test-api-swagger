@@ -14,19 +14,15 @@ function App() {
   const [inpName, setInpName] = useState("");
   const [inpDesc, setInpDesc] = useState("");
   const [inpImg, setInpImg] = useState(null);
-  const [isOpenImgModal, setOpenImgModal] = useState(false); 
   const [isViewModal, setOpenView] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [editBaxh, setBaxsh] = useState({});
-  const [editModal, setEditModal] = useState(false);
-  const [editName, setEditName] = useState(editBaxh.name);
-  const [editDesc, setEditDesc] = useState(editBaxh.description);
+  const [isEditModal, setEditModal] = useState(false);
+  const [editTask, setEditTask] = useState(null);
+  const [isImgModalOpen, setIsImgModalOpen] = useState(false);
+  const [currentTaskId, setCurrentTaskId] = useState(null); 
+  const [selectedFiles, setSelectedFiles] = useState(null);
+  const [previewUrls, setPreviewUrls] = useState([]);
 
-
-  useEffect(()=> {
-    setEditName(editBaxh.name)
-    setEditDesc(editBaxh.description)
-  },[editBaxh])
   function handleClick() {
     if (localStorage.theme === 'dark' || !('theme' in localStorage)) {
       document.documentElement.classList.add('dark');
@@ -112,26 +108,92 @@ function App() {
     setOpenView(true);
   }
 
-  const handleEditer = (e) => {
+  const handleEdit = (task) => {
+    setEditTask(task);
+    setInpName(task.name);
+    setInpDesc(task.description);
     setEditModal(true);
-    setBaxsh(e);
-  }
-
-  const handleEdit = async(e) => {
+  };
+  
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
-    let updateUSer = {
-      ...editBaxh,
-      name : editName,
-      description : editDesc,
-    }
+  
     try {
-      await axios.put(Api,updateUSer)
+      const updatedData = {
+        id: editTask.id,
+        Name: inpName,
+        Description: inpDesc,
+      };
+  
+      const response = await fetch(`${Api}`, {
+        method: 'PUT',
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedData),
+      });
+  
+      if (!response.ok) {
+        throw new Error(`Ошибка при обновлении: ${response.statusText}`);
+      }
+  
+      setEditModal(false);
+      setEditTask(null);
+      setInpName("");
+      setInpDesc("");
+      Get();
     } catch (error) {
-      console.error(error);
+      console.error("Ошибка при обновлении:", error);
     }
-    setEditModal(false)
-  }
+  };
 
+  const openImgModal = (taskId) => {
+    setCurrentTaskId(taskId);
+    setIsImgModalOpen(true);
+  };
+  
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    setSelectedFiles(files);
+
+    const previews = [];
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        previews.push(reader.result);
+        if (previews.length === files.length) {
+          setPreviewUrls(previews);
+        }
+      };
+    });
+  };
+  
+  const handleAddImage = async () => {
+    if (!selectedFiles || selectedFiles.length === 0) {
+      alert("Выберите файлы перед загрузкой!");
+      return;
+    }
+
+    const formData = new FormData();
+    selectedFiles.forEach((file) => {
+      formData.append("Images", file);
+    });
+
+    try {
+      await axios.post(`${Api}/${currentTaskId}/images`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      setSelectedFiles(null);
+      setPreviewUrls([]); // Очистка превью после загрузки
+      Get();
+      setIsImgModalOpen(false);
+    } catch (error) {
+      console.error('Ошибка:', error);
+    }
+  };
+    
   
   return (
     <>
@@ -143,13 +205,6 @@ function App() {
           <button type='submit' className='bg-black text-white py-1 px-7 cursor-pointer rounded-2xl'>Save</button>
         </form>
     </Modal>
-
-   <Modal open={isOpenImgModal} footer={null} onCancel={()=> setOpenImgModal(false)}>
-      <form className='flex flex-col justify-center items-center gap-4 py-3'>
-        <input onChange={(e)=> setInpImg([...e.target.files])} type="file" multiple />
-        <button type='submit' className='bg-black text-white py-1 px-7 cursor-pointer rounded-2xl'>Save</button>
-      </form>
-   </Modal>
 
    <Modal open={isViewModal} footer={null} onCancel={()=> setOpenView(false)}>
    {selectedTask && (
@@ -166,36 +221,45 @@ function App() {
       )}
    </Modal>
 
-   <Modal open={editModal} footer={null} onCancel={()=> setEditModal(false)}>
-     <form onSubmit={handleEdit} className='flex flex-col justify-center items-center gap-4'>
-        <input className='border rounded w-[300px] py-2 px-3' type="text" value={editName} onChange={(e) => setEditName(e.target.value)} />
-        <input className='border rounded w-[300px] py-2 px-3' type="text" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
-        <button type='submit' className='bg-black text-white py-1 px-7 cursor-pointer rounded-2xl'>Save</button>
-     </form>
-   </Modal>
+   <Modal open={isEditModal} footer={null} onCancel={() => setEditModal(false)}>
+      <form onSubmit={handleEditSubmit} className="flex flex-col justify-center items-center gap-4">
+        <input value={inpName} onChange={(e) => setInpName(e.target.value)} className="border rounded w-[300px] py-2 px-3" type="text" placeholder="Name..." />
+        <input value={inpDesc} onChange={(e) => setInpDesc(e.target.value)} className="border rounded w-[300px] py-2 px-3" type="text" placeholder="Description..." />
+        <button type="submit" className="bg-black text-white py-1 px-7 cursor-pointer rounded-2xl">Update</button>
+      </form>
+    </Modal>
+   
+    <Modal title="Add Image" open={isImgModalOpen} onCancel={() => setIsImgModalOpen(false)} footer={null}>
+        <div className='flex flex-col justify-center items-center gap-5'>
+          <input type="file" multiple onChange={handleFileSelect} className="p-2.5 cursor-pointer" />
+          <div className='flex gap-2 flex-wrap'>
+            {previewUrls.map((src, index) => (
+              <img key={index} src={src} alt="Preview" className='w-20 h-20 object-cover border rounded' />
+            ))}
+          </div>
+          <button onClick={handleAddImage} className="w-[200px] mt-3 bg-black text-white py-1 px-4 rounded-2xl cursor-pointer">
+            Upload
+          </button>
+        </div>
+      </Modal>
 
     <div className='w-[70%] m-auto gap-4 flex md:justify-end justify-center py-10'>
         <button onClick={()=> setOpenModal(true)} className='py-1 cursor-pointer px-4 border-2 rounded-2xl'>ADD +</button>
         <button className="bg-black dark:bg-white dark:text-black text-white cursor-pointer py-1 px-3 rounded-2xl" onClick={handleClick}>{theme}</button>
     </div>
     <div className='md:w-[80%] w-[90%] block m-auto md:flex justify-between items-center gap-7'>
-      <div className='md:w-[500px] w-full'>
-        <h1 className='md:text-4xl text-3xl md:text-left text-center font-bold'>Working with formDate and swagger</h1>
-        <p className='py-7'>Lorem ipsum, dolor sit amet consectetur adipisicing elit. Aut labore odio sequi dignissimos debitis omnis modi expedita at! Blanditiis, nobis? Optio recusandae cumque officiis sunt eligendi. At aut magni ratione!
-        praesentium. Itaque voluptates beatae hic voluptas dignissimos maxime amet id consequatur inventore rerum.
-        Facilis, molestiae expedita reprehenderit temporibus praesentium officiis modi ex asperiores quibusdam consequuntur esse fugiat aspernatur rem a nobis, in architecto accusamus nulla assumenda obcaecati. Sit sed nobis dolorem facilis assumenda!</p>
-      </div>
-      <div className='md:w-[900px] w-[90%] h-[600px] flex flex-wrap gap-3 overflow-auto'> 
+      <div className='md:w-full w-[90%] h-[600px] flex flex-wrap gap-3 overflow-auto'> 
         {
           data.length > 0 ? data.map((e) => (
             <div key={e.id} className='w-[370px] h-[300px] p-5 flex flex-col justify-center items-center gap-3 shadow-2xl rounded-2xl dark:bg-blue-800'>
               <div className='flex gap-2'>
               {e.images && e.images.length > 0 ? e.images.map((img) => (
-                <div key={e.id}>
-                  <img key={img.id} src={`https://to-dos-api.softclub.tj/images/${img.imageName}`} alt={img.imageName} className="w-20 h-20 object-cover border rounded" />
+                <div key={img.id}>  
+                  <img src={`https://to-dos-api.softclub.tj/images/${img.imageName}`} alt={img.imageName} className="w-20 h-20 object-cover border rounded" />
                   <button onClick={()=> handleDeleteImg(img.id)} className='bg-black text-white dark:bg-white dark:text-black px-4.5 cursor-pointer'>Delete</button>
                 </div>
                 )) : <p>No images</p>}
+
               </div>
               <p>Name: {e.name}</p>
               <p>Description: {e.description}</p>
@@ -205,9 +269,9 @@ function App() {
               </div>
               <div className='flex gap-3'>
                 <button onClick={()=> deleteUser(e.id)} className='cursor-pointer bg-black text-white dark:bg-white dark:text-black rounded-2xl px-2'>Delete</button>
-                <button onClick={()=> handleEditer(e)} className='cursor-pointer bg-black text-white dark:bg-white dark:text-black rounded-2xl px-2'>Edit</button>
+                <button  onClick={() => handleEdit(e)} className='cursor-pointer bg-black text-white dark:bg-white dark:text-black rounded-2xl px-2'>Edit</button>
                 <button onClick={()=> handleView(e)} className='cursor-pointer bg-black text-white dark:bg-white dark:text-black rounded-2xl px-2'>View</button>
-                <button onClick={()=> setOpenImgModal(true)} className='cursor-pointer bg-black text-white dark:bg-white dark:text-black rounded-2xl px-2'>Add img</button>
+                <button onClick={() => openImgModal(e.id)} className='cursor-pointer bg-black text-white dark:bg-white dark:text-black rounded-2xl px-2'>Add img</button>
               </div>
             </div>
           ))
